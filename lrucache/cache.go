@@ -18,6 +18,9 @@ type entry struct {
 }
 
 func NewCache(size int) LRUCache {
+	if size < 0 {
+		size = 0
+	}
 	return LRUCache{
 		size:       size,
 		items:      make(map[interface{}]*list.Element),
@@ -26,23 +29,26 @@ func NewCache(size int) LRUCache {
 }
 
 func (this *LRUCache) Get(key interface{}) (val interface{}, found bool) {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+	this.mutex.RLock()
 	e, exists := this.items[key]
 	if exists {
+		this.mutex.RUnlock()
+		this.mutex.Lock()
 		this.linkedList.MoveToFront(e)
+		this.mutex.Unlock()
 		return e.Value.(entry).value, true
 	}
+	this.mutex.RUnlock()
 	return
 }
 
 func (this *LRUCache) Set(key, val interface{}) {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
 	item := entry{
 		key:   key,
 		value: val,
 	}
+	this.mutex.Lock()
+	defer this.mutex.Unlock()
 
 	e, exists := this.items[key]
 	if exists {
@@ -50,7 +56,6 @@ func (this *LRUCache) Set(key, val interface{}) {
 		this.items[key].Value = item
 	} else {
 		this.items[key] = this.linkedList.PushFront(item)
-
 		if len(this.items) > this.size {
 			e := this.linkedList.Back()
 			delete(this.items, e.Value.(entry).key)
@@ -60,8 +65,8 @@ func (this *LRUCache) Set(key, val interface{}) {
 }
 
 func (this *LRUCache) Peek(key interface{}) (val interface{}, found bool) {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+	this.mutex.RLock()
+	defer this.mutex.RUnlock()
 	e, exists := this.items[key]
 	if exists {
 		return e.Value.(entry).value, true
@@ -70,13 +75,16 @@ func (this *LRUCache) Peek(key interface{}) (val interface{}, found bool) {
 }
 
 func (this *LRUCache) Remove(key interface{}) {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
+	this.mutex.RLock()
 	e, exists := this.items[key]
 	if exists {
+		this.mutex.RUnlock()
+		this.mutex.Lock()
 		this.linkedList.Remove(e)
 		delete(this.items, e.Value.(entry).key)
+		this.mutex.Unlock()
 	}
+	this.mutex.RUnlock()
 }
 
 func (this *LRUCache) Keys() []interface{} {
